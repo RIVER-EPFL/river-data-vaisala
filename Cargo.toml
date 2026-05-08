@@ -1,5 +1,5 @@
 [package]
-name = "river-data-sync-vaisala"
+name = "river-data-vaisala"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
@@ -10,7 +10,7 @@ license = "MIT"
 unsafe_code = "forbid"
 
 [dependencies]
-# Core sync library (local dev: patched via .cargo/config.toml)
+# Core sync library
 river-data-core = { version = "0.1.1", features = ["client"] }
 
 # HTTP client

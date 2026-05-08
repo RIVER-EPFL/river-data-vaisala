@@ -15,5 +15,5 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/river-data-sync-vaisala /usr/local/bin/
-ENTRYPOINT ["river-data-sync-vaisala"]
+COPY --from=builder /app/target/release/river-data-vaisala /usr/local/bin/
+ENTRYPOINT ["river-data-vaisala"]
