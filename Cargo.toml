@@ -2,7 +2,7 @@
 name = "river-data-sync-vaisala"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.93"
+rust-version = "1.95"
 description = "Vaisala viewLinc sync microservice for River Data"
 license = "MIT"
 
