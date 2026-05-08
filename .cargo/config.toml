@@ -1,0 +1,2 @@
+[patch.crates-io]
+river-data-core = { path = "../river-data-core" }
