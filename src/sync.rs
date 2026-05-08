@@ -61,7 +61,7 @@ pub async fn discover_streams(
         }
 
         let location_key = attrs.node_id.to_string();
-        let leaf_name = attrs.path.split('/').last().unwrap_or(&attrs.text);
+        let leaf_name = attrs.path.split('/').next_back().unwrap_or(&attrs.text);
 
         let mut metadata = serde_json::json!({
             "vaisala_node_id": attrs.node_id,
