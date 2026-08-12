@@ -26,7 +26,8 @@ pub struct LocationHistoryAttributes {
 #[serde(from = "RawDataPoint")]
 pub struct DataPoint {
     pub timestamp: i64,
-    pub value: f64,
+    /// None when the logger reported no value for the interval.
+    pub value: Option<f64>,
 }
 
 // viewLinc 5.2.1.859 serialises epoch fields as floats (e.g. `1780007546.0`),
@@ -38,7 +39,7 @@ impl From<RawDataPoint> for DataPoint {
     fn from(raw: RawDataPoint) -> Self {
         Self {
             timestamp: raw.0 as i64,
-            value: raw.1.unwrap_or(0.0),
+            value: raw.1,
         }
     }
 }
@@ -117,7 +118,7 @@ mod tests {
         let attrs = &resp.data[0].attributes;
         assert_eq!(attrs.id, 1312);
         assert_eq!(attrs.data_points[0].timestamp, 1_772_259_060);
-        assert_eq!(attrs.data_points[0].value, 11.97);
+        assert_eq!(attrs.data_points[0].value, Some(11.97));
     }
 
     // Integer epochs (the historical format) must keep working.

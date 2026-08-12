@@ -50,14 +50,20 @@ impl VaisalaBackend {
                 .data_points
                 .into_iter()
                 .filter(|dp| since_epoch.is_none_or(|s| dp.timestamp > s))
-                .map(|dp| {
+                .filter_map(|dp| {
+                    let value = dp.value?;
+                    // Clamp to a representable datetime before arithmetic so a
+                    // malformed epoch cannot overflow the snap below.
+                    let epoch = DateTime::from_timestamp(dp.timestamp, 0)
+                        .unwrap_or_else(Utc::now)
+                        .timestamp();
                     // viewLinc loggers report on a 10-minute cadence with second-level
                     // jitter; snapping keeps one canonical timestamp per interval.
-                    let rounded_epoch = ((dp.timestamp + 300) / 600) * 600;
+                    let rounded_epoch = ((epoch + 300) / 600) * 600;
                     let time = DateTime::from_timestamp(rounded_epoch, 0)
-                        .or_else(|| DateTime::from_timestamp(dp.timestamp, 0))
+                        .or_else(|| DateTime::from_timestamp(epoch, 0))
                         .unwrap_or_else(Utc::now);
-                    IngestReading::new(time, dp.value)
+                    Some(IngestReading::new(time, value))
                 })
                 .collect();
 
@@ -151,7 +157,13 @@ impl SourceBackend for VaisalaBackend {
     ) -> Result<Vec<StreamReadings>, BackendError> {
         let by_location: HashMap<i32, &StreamFetchRequest> = requests
             .iter()
-            .filter_map(|r| r.source_key.parse::<i32>().ok().map(|id| (id, r)))
+            .filter_map(|r| match r.source_key.parse::<i32>() {
+                Ok(id) => Some((id, r)),
+                Err(_) => {
+                    tracing::warn!(source_key = %r.source_key, "Skipping stream: source_key is not a viewLinc location id");
+                    None
+                }
+            })
             .collect();
 
         let backfill: Vec<i32> = by_location
@@ -201,7 +213,13 @@ impl SourceBackend for VaisalaBackend {
     ) -> Result<Vec<StreamStatusEvents>, BackendError> {
         let by_location: HashMap<i32, &DataStream> = streams
             .iter()
-            .filter_map(|s| s.source_key.parse::<i32>().ok().map(|id| (id, s)))
+            .filter_map(|s| match s.source_key.parse::<i32>() {
+                Ok(id) => Some((id, s)),
+                Err(_) => {
+                    tracing::warn!(source_key = %s.source_key, "Skipping stream: source_key is not a viewLinc location id");
+                    None
+                }
+            })
             .collect();
         if by_location.is_empty() {
             return Ok(Vec::new());
