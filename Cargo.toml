@@ -10,7 +10,7 @@ license = "MIT"
 unsafe_code = "forbid"
 
 [dependencies]
-river-data-core = { version = "0.5.0", features = ["client"] }
+river-data-core = { version = "0.6.0", features = ["client"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1"
