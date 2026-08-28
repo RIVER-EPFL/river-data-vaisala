@@ -70,11 +70,11 @@ impl VaisalaBackend {
             if readings.is_empty() {
                 continue;
             }
-            out.push(StreamReadings {
-                stream_id: req.stream_id,
-                source_key: req.source_key.clone(),
+            out.push(StreamReadings::new(
+                req.stream_id,
+                req.source_key.clone(),
                 readings,
-            });
+            ));
         }
         out
     }
@@ -142,6 +142,8 @@ impl SourceBackend for VaisalaBackend {
                 source_path: attrs.path.clone(),
                 metadata,
                 measurement_type: Some("continuous".to_string()),
+                sensor_id: None,
+                replicates: None,
             });
         }
 
