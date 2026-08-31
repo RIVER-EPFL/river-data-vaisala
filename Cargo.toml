@@ -3,7 +3,7 @@ name = "river-data-vaisala"
 version = "0.3.0"
 edition = "2024"
 rust-version = "1.95"
-description = "Vaisala viewLinc sync microservice for River Data"
+description = "Vaisala viewLinc sync microservice for RIVER Data"
 license = "MIT"
 
 [lints.rust]
