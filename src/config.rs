@@ -7,6 +7,9 @@ pub struct VaisalaConfig {
     pub bearer_token: String,
     pub skip_tls_verify: bool,
     pub max_history_days: i64,
+    /// Seconds between device-status polls; status piggybacks on the readings
+    /// cycle but only emits when this much time has passed.
+    pub status_interval_seconds: i64,
 }
 
 impl VaisalaConfig {
@@ -16,6 +19,7 @@ impl VaisalaConfig {
             bearer_token: env::require("VAISALA_BEARER_TOKEN")?,
             skip_tls_verify: env::bool_or("VAISALA_SKIP_TLS_VERIFY", false),
             max_history_days: env::parse_or("MAX_HISTORY_DAYS", 90),
+            status_interval_seconds: env::parse_or("STATUS_INTERVAL_SECONDS", 1800),
         })
     }
 }

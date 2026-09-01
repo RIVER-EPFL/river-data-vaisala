@@ -16,6 +16,9 @@ use crate::vaisala_client::VaisalaClient;
 pub struct VaisalaBackend {
     config: VaisalaConfig,
     client: VaisalaClient,
+    /// When device status was last emitted; status rides the readings cycle
+    /// but only every `status_interval_seconds`.
+    last_status_emit: std::sync::Mutex<Option<DateTime<Utc>>>,
 }
 
 fn parse_hierarchy(path: &str) -> river_data_core::serde_json::Value {
@@ -29,7 +32,11 @@ fn parse_hierarchy(path: &str) -> river_data_core::serde_json::Value {
 
 impl VaisalaBackend {
     pub fn new(config: VaisalaConfig, client: VaisalaClient) -> Self {
-        Self { config, client }
+        Self {
+            config,
+            client,
+            last_status_emit: std::sync::Mutex::new(None),
+        }
     }
 
     /// Map one history response onto its requesting streams, filtering each
@@ -213,6 +220,21 @@ impl SourceBackend for VaisalaBackend {
         &self,
         streams: &[DataStream],
     ) -> Result<Vec<StreamStatusEvents>, BackendError> {
+        // Each emission stamps a fresh `now`, so every poll inserts a new row
+        // server-side; the interval, not the sync cycle, sets the status cadence.
+        let now = Utc::now();
+        {
+            let mut last = self
+                .last_status_emit
+                .lock()
+                .map_err(|_| "status emit lock poisoned".to_string())?;
+            if let Some(prev) = *last
+                && (now - prev).num_seconds() < self.config.status_interval_seconds
+            {
+                return Ok(Vec::new());
+            }
+            *last = Some(now);
+        }
         let by_location: HashMap<i32, &DataStream> = streams
             .iter()
             .filter_map(|s| match s.source_key.parse::<i32>() {
@@ -229,7 +251,6 @@ impl SourceBackend for VaisalaBackend {
 
         let location_ids: Vec<i32> = by_location.keys().copied().collect();
         let data = self.client.get_locations_data(&location_ids).await?;
-        let now = Utc::now();
 
         let mut seen: HashSet<i32> = HashSet::new();
         let mut out = Vec::new();
