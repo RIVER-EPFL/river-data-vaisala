@@ -59,17 +59,20 @@ impl VaisalaBackend {
                 .filter(|dp| since_epoch.is_none_or(|s| dp.timestamp > s))
                 .filter_map(|dp| {
                     let value = dp.value?;
-                    // Clamp to a representable datetime before arithmetic so a
-                    // malformed epoch cannot overflow the snap below.
-                    let epoch = DateTime::from_timestamp(dp.timestamp, 0)
-                        .unwrap_or_else(Utc::now)
-                        .timestamp();
+                    // A point with no representable timestamp is not a point at now:
+                    // storing it would latch the cursor and drop everything older.
+                    let Some(exact) = DateTime::from_timestamp(dp.timestamp, 0) else {
+                        tracing::warn!(
+                            location_id = attrs.id,
+                            epoch = dp.timestamp,
+                            "Skipping data point with unrepresentable timestamp"
+                        );
+                        return None;
+                    };
                     // viewLinc loggers report on a 10-minute cadence with second-level
                     // jitter; snapping keeps one canonical timestamp per interval.
-                    let rounded_epoch = ((epoch + 300) / 600) * 600;
-                    let time = DateTime::from_timestamp(rounded_epoch, 0)
-                        .or_else(|| DateTime::from_timestamp(epoch, 0))
-                        .unwrap_or_else(Utc::now);
+                    let rounded_epoch = ((exact.timestamp() + 300) / 600) * 600;
+                    let time = DateTime::from_timestamp(rounded_epoch, 0).unwrap_or(exact);
                     Some(IngestReading::new(time, value))
                 })
                 .collect();
@@ -279,5 +282,138 @@ impl SourceBackend for VaisalaBackend {
             });
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{DataPoint, JsonApiResource, LocationHistoryAttributes};
+    use river_data_core::uuid::Uuid;
+
+    fn history(id: i32, points: &[(i64, Option<f64>)]) -> LocationsHistoryResponse {
+        LocationsHistoryResponse {
+            data: vec![JsonApiResource {
+                attributes: LocationHistoryAttributes {
+                    id,
+                    data_points: points
+                        .iter()
+                        .map(|&(timestamp, value)| DataPoint { timestamp, value })
+                        .collect(),
+                },
+            }],
+        }
+    }
+
+    fn request(since: Option<i64>) -> StreamFetchRequest {
+        StreamFetchRequest {
+            stream_id: Uuid::nil(),
+            source_key: "1270".into(),
+            since: since.and_then(|s| DateTime::from_timestamp(s, 0)),
+        }
+    }
+
+    fn readings(history: LocationsHistoryResponse, req: &StreamFetchRequest) -> Vec<(i64, f64)> {
+        let requests = HashMap::from([(1270, req)]);
+        VaisalaBackend::history_to_readings(history, &requests)
+            .into_iter()
+            .flat_map(|s| s.readings)
+            .map(|r| (r.time.timestamp(), r.raw_value))
+            .collect()
+    }
+
+    #[test]
+    fn test_history_to_readings_snaps_to_ten_minute_cadence() {
+        let req = request(None);
+        // 1_772_259_060 = 1_772_259_000 + 60; 1_772_259_299 rounds down, 1_772_259_300 rounds up
+        let out = readings(
+            history(
+                1270,
+                &[
+                    (1_772_259_060, Some(1.0)),
+                    (1_772_259_299, Some(2.0)),
+                    (1_772_259_300, Some(3.0)),
+                ],
+            ),
+            &req,
+        );
+        assert_eq!(
+            out,
+            vec![
+                (1_772_259_000, 1.0),
+                (1_772_259_000, 2.0),
+                (1_772_259_600, 3.0)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_history_to_readings_filters_by_cursor() {
+        let req = request(Some(1_772_259_000));
+        let out = readings(
+            history(
+                1270,
+                &[
+                    (1_772_258_400, Some(1.0)),
+                    (1_772_259_000, Some(2.0)),
+                    (1_772_259_600, Some(3.0)),
+                ],
+            ),
+            &req,
+        );
+        assert_eq!(out, vec![(1_772_259_600, 3.0)]);
+    }
+
+    #[test]
+    fn test_history_to_readings_skips_missing_values() {
+        let req = request(None);
+        let out = readings(
+            history(1270, &[(1_772_259_000, None), (1_772_259_600, Some(3.0))]),
+            &req,
+        );
+        assert_eq!(out, vec![(1_772_259_600, 3.0)]);
+    }
+
+    #[test]
+    fn test_history_to_readings_drops_streams_with_no_readings() {
+        let req = request(None);
+        let requests = HashMap::from([(1270, &req)]);
+        let out =
+            VaisalaBackend::history_to_readings(history(1270, &[(1_772_259_000, None)]), &requests);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn test_history_to_readings_ignores_unrequested_locations() {
+        let req = request(None);
+        let out = readings(history(9999, &[(1_772_259_000, Some(1.0))]), &req);
+        assert!(out.is_empty());
+    }
+
+    // Scenario: viewLinc returns an epoch no datetime can represent.
+    // Expected behaviour: the point is skipped, never stored at the present instant.
+    #[test]
+    fn test_history_to_readings_skips_unrepresentable_epochs() {
+        let req = request(None);
+        for bad in [i64::MAX, i64::MIN] {
+            let out = readings(
+                history(1270, &[(bad, Some(1.0)), (1_772_259_000, Some(2.0))]),
+                &req,
+            );
+            assert_eq!(
+                out,
+                vec![(1_772_259_000, 2.0)],
+                "epoch {bad} must be skipped"
+            );
+        }
+    }
+
+    #[test]
+    fn test_history_to_readings_unrepresentable_epoch_alone_yields_no_stream() {
+        let req = request(None);
+        let requests = HashMap::from([(1270, &req)]);
+        let out =
+            VaisalaBackend::history_to_readings(history(1270, &[(i64::MAX, Some(1.0))]), &requests);
+        assert!(out.is_empty());
     }
 }
