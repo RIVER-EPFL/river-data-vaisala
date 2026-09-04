@@ -91,11 +91,31 @@ pub struct LocationDataAttributes {
     pub signal_quality: i16,
     #[serde(default)]
     pub unreachable: bool,
+    /// The places viewLinc presents this channel at; absent on servers that do not report it.
+    #[serde(default)]
+    pub decimal_places: Option<i16>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn locations_data_carries_the_channel_decimal_places() {
+        let json = r#"{"jsonapi": {"version": "5.2.1.859"}, "data": [{"type": "locations_data",
+            "id": "1312", "attributes": {"id": 1312, "display_units": "°C", "channel_id": 2,
+            "decimal_places": 2}}]}"#;
+        let resp: LocationsDataResponse = river_data_core::serde_json::from_str(json).unwrap();
+        assert_eq!(resp.data[0].attributes.decimal_places, Some(2));
+    }
+
+    #[test]
+    fn locations_data_without_decimal_places_declares_none() {
+        let json = r#"{"jsonapi": {"version": "5.0.0"}, "data": [{"type": "locations_data",
+            "id": "1", "attributes": {"id": 1, "display_units": "mm"}}]}"#;
+        let resp: LocationsDataResponse = river_data_core::serde_json::from_str(json).unwrap();
+        assert_eq!(resp.data[0].attributes.decimal_places, None);
+    }
 
     // viewLinc 5.2.1.859 serialises some integer epoch fields as floats (e.g. `1780007546.0`).
     #[test]
