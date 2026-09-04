@@ -134,7 +134,9 @@ impl SourceBackend for VaisalaBackend {
                 "vaisala_node_id": attrs.node_id,
                 "hierarchy": parse_hierarchy(&attrs.path),
             });
+            let mut decimal_places = None;
             if let Some(ld) = location_data.get(&attrs.node_id) {
+                decimal_places = ld.decimal_places;
                 metadata["device"] = json!({
                     "logger_serial": &ld.logger_serial_number,
                     "probe_serial": &ld.probe_serial_number,
@@ -154,6 +156,7 @@ impl SourceBackend for VaisalaBackend {
                 measurement_type: Some("continuous".to_string()),
                 sensor_id: None,
                 replicates: None,
+                decimal_places,
             });
         }
 
