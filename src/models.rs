@@ -153,8 +153,8 @@ mod tests {
             }}]
         }"#;
 
-        let resp: LocationsHistoryResponse =
-            river_data_core::serde_json::from_str(json).expect("integer timestamps must deserialize");
+        let resp: LocationsHistoryResponse = river_data_core::serde_json::from_str(json)
+            .expect("integer timestamps must deserialize");
         let attrs = &resp.data[0].attributes;
         assert_eq!(attrs.id, 1);
         assert_eq!(attrs.data_points[0].timestamp, 1_772_259_060);

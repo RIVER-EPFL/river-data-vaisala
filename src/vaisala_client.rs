@@ -16,7 +16,11 @@ pub struct VaisalaClient {
 }
 
 impl VaisalaClient {
-    pub fn new(base_url: &str, bearer_token: &str, skip_tls_verify: bool) -> Result<Self, reqwest::Error> {
+    pub fn new(
+        base_url: &str,
+        bearer_token: &str,
+        skip_tls_verify: bool,
+    ) -> Result<Self, reqwest::Error> {
         let http_client = Client::builder()
             .danger_accept_invalid_certs(skip_tls_verify)
             .timeout(Duration::from_secs(300))
@@ -52,7 +56,9 @@ impl VaisalaClient {
     }
 
     pub async fn get_locations(&self) -> Result<LocationsResponse, VaisalaError> {
-        let response = self.get(format!("{}/locations?flatten=true", self.base_url)).await?;
+        let response = self
+            .get(format!("{}/locations?flatten=true", self.base_url))
+            .await?;
         response
             .json()
             .await
