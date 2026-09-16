@@ -5,7 +5,9 @@ use river_data_core::client::{
     BackendError, SourceBackend, StreamDescriptor, StreamFetchRequest, StreamReadings,
     StreamStatusEvents,
 };
-use river_data_core::models::{DataStream, IngestReading, IngestStatusEvent};
+use river_data_core::models::{
+    DataStream, IngestReading, IngestStatusEvent, InstrumentGranularity, MeasurementType,
+};
 use river_data_core::serde_json::json;
 use river_data_core::tracing;
 
@@ -153,10 +155,11 @@ impl SourceBackend for VaisalaBackend {
                 source_name: leaf_name.to_string(),
                 source_path: attrs.path.clone(),
                 metadata,
-                measurement_type: Some("continuous".to_string()),
+                measurement_type: Some(MeasurementType::Continuous.to_string()),
                 sensor_id: None,
                 replicates: None,
                 decimal_places,
+                instrument_granularity: Some(InstrumentGranularity::PerSiteParameter),
             });
         }
 
@@ -281,6 +284,8 @@ impl SourceBackend for VaisalaBackend {
                         attrs.line_powered,
                         attrs.unreachable
                     ),
+                    // The stream list carries no instrument, so there is none to name here.
+                    sensor_id: None,
                 }],
             });
         }
